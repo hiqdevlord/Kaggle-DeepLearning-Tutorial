@@ -1,5 +1,8 @@
 import numpy as np
 import pandas as pd
+import time
+
+start = time.time() # Start timer
 
 train = pd.read_csv("labeledTrainData.tsv",header=0,delimiter="\t",quoting=3)
 test = pd.read_csv("testData.tsv",header=0,delimiter="\t",quoting=3)
@@ -48,7 +51,8 @@ def review_to_words(review):
     review_text = BeautifulSoup(review).get_text()     # Remove any HTML 
     review_text = re.sub("[^a-zA-Z]"," ", review_text) # Remove any numbers & punctuation
     words = review_text.lower().split()                # Convert to lower case, split into words
-    meaningful_words = [w for w in words if not w in stopwords.words('english')]  # Remove stopwords
+    stops = set(stopwords.words("english")) # Sets faster than lists!
+    meaningful_words = [w for w in words if not w in stops]  # Remove stopwords
     return(" ".join(meaningful_words))  # Pass the words back to the caller as a single "document"   
 
 num_reviews = train["review"].size
@@ -71,6 +75,12 @@ for i in xrange(0,num_reviews):
         print "Review %d of %d\n" % (i+1,num_reviews)
     clean_test_reviews.append(review_to_words(test["review"][i]))
 
+# Print time taken so far
+end = time.time() 
+elapsed = end - start
+print "Time taken to clean reviews: ", elapsed, "seconds."
+start = time.time()
+
 # Create bag of words from labeled train data (using sklearn)
 # NOTE: Some difficulty (on home laptop) importing the feature extractor 
 # - due to numpy / scipy disagreeing about sizes of integers?  
@@ -81,7 +91,7 @@ vectorizer = CountVectorizer(analyzer = "word",  # Don't create n-grams
                              tokenizer = None, # Could also call our own tokenizer
                              preprocessor = None, # Since we did our own
                              stop_words = None, # Since we already removed them
-                             max_features = 10000) # Max vocab
+                             max_features = 5000) # Max vocab
 
 # "Fit" learns the vocabulary
 # "Transform" returns the feature matrix
@@ -101,6 +111,10 @@ from sklearn.ensemble import RandomForestClassifier
 forest = RandomForestClassifier(n_estimators = 100)
 forest = forest.fit(train_data_features,train["sentiment"])
 
+end = time.time() 
+elapsed = end - start
+print "Time taken to extract features and fit model: ", elapsed, "seconds."
+
 # Get test results.  NOTE that we do NOT call "fit" for the test set
 test_data_features = vectorizer.transform(clean_test_reviews).toarray() 
 result = forest.predict(test_data_features)
@@ -114,4 +128,7 @@ known_result = pd.read_csv("testData-TRUTH.csv",header=0)
 percent_correct = sum(known_result["sentiment"]==output["sentiment"])/25000.
 print "Final fraction correct = %f\n" % (percent_correct,)
 
+# Results
+# 10,000 word vocab -> 84.9% correct
+# 5,000 word vocab -> 84.5% correct
 
