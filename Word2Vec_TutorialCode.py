@@ -27,6 +27,8 @@ def review_to_words(review):
     review_text = BeautifulSoup(review).get_text() 
     review_text = re.sub("[^a-zA-Z]"," ", review_text)
     words = review_text.lower().split()
+    stops = set(stopwords.words("english"))
+    words = [w for w in words if not w in stops]
     return(words)
 
 def review_to_sentences(review):
@@ -47,7 +49,7 @@ unlabeled_train = pd.read_csv("unlabeledTrainData.tsv",header=0,delimiter="\t",q
 print "Read %d labeled train reviews, %d labeled test reviews, and %d unlabeled "\
     "reviews\n" % (train["review"].size, test["review"].size, unlabeled_train["review"].size )
 
-num_features = 1024 # should be a multiple of 4 for optimal speed but can be anything. Lower -> faster
+num_features = 4096 # should be a multiple of 4 for optimal speed but can be anything. Lower -> faster
 min_word_count = 10 # Set to at least some reasonable value like 10. Higher -> faster
 num_workers = 4 # Number of threads to run in parallel. Varies by machine but at least 4 is a safe bet
 
@@ -131,7 +133,7 @@ clean_test_reviews = []
 for review in test["review"]:
     clean_test_reviews.append(review_to_words(review))
 
-# Slow; see comments above - good candidate for parallelizing if we want to go that route
+# Slowish; see comments above - good candidate for parallelizing if we want to go that route
 testDataVecs = getAvgFeatureVecs( clean_test_reviews, model, num_features )
 
 # Test & extract results
@@ -153,14 +155,7 @@ print "Fraction correct = %f" % percent_correct
 
 # ***********************
 #
-# Results notes:  128 features x 50 min words + RF w/ 100 estimators -> 79.8% correct
-# 128 features x 25 min words + RF w/ 100 estimators -> 79.2% correct
-# 256 features x 25 min words + RF w/ 100 estimators -> 79.7% correct
-# 256 features x 25 min words + RF w/ 200 estimators -> 80.2% correct
-# 256 features x 100 min words + RF w/ 100 estimators -> 79.0% correct
-
-# Could also try hooking up different classifiers, though that's not the main point of the tutorial
-
+# With 4096 features and stopword removal (supervised portion only): 82.4% correct
 
 
 
