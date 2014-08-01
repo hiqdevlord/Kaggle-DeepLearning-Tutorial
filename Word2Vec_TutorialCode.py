@@ -6,10 +6,7 @@
 # 2. Install cython <- May be problematic for Windows users -- resulting in 70x slowdown
 # 3. Download the data
 #
-# If installing skikit-learn: sudo port install py27-scikit-learn (or appropriate
-#     python version if not 2.7 (uses MacPorts)
-
-# This assumes you're already in the directory containing the data files
+# This script assumes you're already in the directory containing the data files
 
 import logging
 from gensim.models import word2vec
@@ -23,22 +20,22 @@ from nltk.corpus import stopwords
 # This controls word2vec output
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-def review_to_words(review):
+def review_to_words(review,remove_stopwords=False):
     review_text = BeautifulSoup(review).get_text() 
     review_text = re.sub("[^a-zA-Z]"," ", review_text)
+    review_text = re.sub(r'(.)\1+', r'\1\1',review_text) # replace doubled up letters
     words = review_text.lower().split()
-    stops = set(stopwords.words("english"))
-    words = [w for w in words if not w in stops]
+    if remove_stopwords:
+        stops = set(stopwords.words("english"))
+        words = [w for w in words if not w in stops]
     return(words)
 
-def review_to_sentences(review):
-    review_text = BeautifulSoup(review).get_text()
-    raw_sentences = string.split(review_text,sep=".")
+def review_to_sentences(review,remove_stopwords=False):
+    raw_sentences = string.split(review,sep=".")
     sentences = []
     for raw_sentence in raw_sentences:
-        sentence = re.sub("[^a-zA-Z]"," ",raw_sentence)
-        if len(sentence) > 0:
-            sentences.append(sentence.lower().split())
+        if len(raw_sentence) > 0:
+            sentences.append(review_to_words(raw_sentence,remove_stopwords))
     return sentences
 
 # Read data from files
@@ -117,7 +114,7 @@ print "Creating average feature vectors for labeled reviews..."
 # Unlike the first step, we now need to parse the reviews as a whole, not as individual sentences
 clean_train_reviews = []
 for review in train["review"]:
-    clean_train_reviews.append(review_to_words(review))
+    clean_train_reviews.append(review_to_words(review,remove_stopwords=True))
 
 trainDataVecs = getAvgFeatureVecs( clean_train_reviews, model, num_features)
 
@@ -131,7 +128,7 @@ forest = forest.fit(trainDataVecs,train["sentiment"])
 print "Creating average feature vecs for test reviews"
 clean_test_reviews = []
 for review in test["review"]:
-    clean_test_reviews.append(review_to_words(review))
+    clean_test_reviews.append(review_to_words(review,remove_stopwords=True))
 
 # Slowish; see comments above - good candidate for parallelizing if we want to go that route
 testDataVecs = getAvgFeatureVecs( clean_test_reviews, model, num_features )
