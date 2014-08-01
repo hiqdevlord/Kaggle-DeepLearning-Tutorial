@@ -50,6 +50,7 @@ words = [w for w in words if not w in stopwords.words('english')]
 def review_to_words(review):
     review_text = BeautifulSoup(review).get_text()     # Remove any HTML 
     review_text = re.sub("[^a-zA-Z]"," ", review_text) # Remove any numbers & punctuation
+    review_text = re.sub(r'(.)\1+', r'\1\1',review_text) # replace doubled up letters
     words = review_text.lower().split()                # Convert to lower case, split into words
     stops = set(stopwords.words("english")) # Sets faster than lists!
     meaningful_words = [w for w in words if not w in stops]  # Remove stopwords
