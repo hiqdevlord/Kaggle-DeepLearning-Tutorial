@@ -8,35 +8,12 @@
 #
 # This script assumes you're already in the directory containing the data files
 
-import logging
 from gensim.models import word2vec
 import numpy as np
-
 import pandas as pd
 from bs4 import BeautifulSoup
 import re, string
-from nltk.corpus import stopwords
 
-# This controls word2vec output
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-
-def review_to_words(review,remove_stopwords=False):
-    review_text = BeautifulSoup(review).get_text() 
-    review_text = re.sub("[^a-zA-Z]"," ", review_text)
-    review_text = re.sub(r'(.)\1+', r'\1\1',review_text) # replace doubled up letters
-    words = review_text.lower().split()
-    if remove_stopwords:
-        stops = set(stopwords.words("english"))
-        words = [w for w in words if not w in stops]
-    return(words)
-
-def review_to_sentences(review,remove_stopwords=False):
-    raw_sentences = string.split(review,sep=".")
-    sentences = []
-    for raw_sentence in raw_sentences:
-        if len(raw_sentence) > 0:
-            sentences.append(review_to_words(raw_sentence,remove_stopwords))
-    return sentences
 
 # Read data from files
 train = pd.read_csv("labeledTrainData.tsv",header=0,delimiter="\t",quoting=3)
@@ -47,52 +24,58 @@ print "Read %d labeled train reviews, %d labeled test reviews, and %d unlabeled 
     "reviews\n" % (train["review"].size, test["review"].size, unlabeled_train["review"].size )
 
 num_features = 4096 # should be a multiple of 4 for optimal speed but can be anything. Lower -> faster
-min_word_count = 10 # Set to at least some reasonable value like 10. Higher -> faster
-num_workers = 4 # Number of threads to run in parallel. Varies by machine but at least 4 is a safe bet
 
-# Can verify that the parallization is working by using >top -o cpu. The Python process should spin up to usage
-# of around num_workers * 100%
-# The num_workers parameter has NO EFFECT IF CYTHON IS NOT INSTALLED AND WORKING PROPERLY!!
+# Load a pre-trained model
+model = Word2Vec.load("model.word2vec")
 
-# Train on the smaller set first -- to illustrate the differences in accuracy between 25k model and 75k model
-# min_count affects vocabulary size and is the minimum times a word must appear to be included in the model
-# size affects the number of features that each word vector will have (optimized if a multiple of 4)
-# workers indicates cores to use for parallelization. Only takes effect if cython is installed
 
-sentences = []
-print "Parsing sentences from training set"
+def clean_review(review,remove_stopwords=False):
+    review_text = BeautifulSoup(review).get_text() 
+    review_text = re.sub("[^a-zA-Z]"," ", review_text)
+    review_text = re.sub(r'(.)\1+', r'\1\1',review_text) # replace doubled up letters
+    words = review_text.lower().split()
+    return(words)
+
+clean_train_reviews = []
 for review in train["review"]:
-    sentences += review_to_sentences(review)
+    clean_train_reviews.append(" ".join(clean_review(review)))
 
-print "Parsing sentences from unlabeled set"
-for review in unlabeled_train["review"]:
-    sentences += review_to_sentences(review)
+# The vectorizer expects a list, with each review as one string (not a list of lists)
+from sklearn.feature_extraction.text import TfidfVectorizer
+vectorizer = TfidfVectorizer(analyzer = "word",   # Don't create n-grams
+                             tokenizer = None,    # Could also call our own tokenizer
+                             preprocessor = None, # Since we did our own
+                             stop_words = "english")   
 
-print "Training model..."
-model = word2vec.Word2Vec(sentences, workers=num_workers, size=num_features,  min_count = min_word_count)
-model.save("model.word2vec")
 
-# The below makes the model more memory efficient but seals it off from further training
-model.init_sims(replace=True)
+# Get tf-idf weights as a dictionary and pass them to a vector weighting function
+vectorizer.fit_transform(clean_train_reviews)  
+idf_weights = vectorizer._tfidf.idf_
+feature_dict = dict(zip(vectorizer.get_feature_names(), idf_weights))
+
 
 # In the tutorial, also make a note that they can save / load this model - train it more later
-
+#
 # ************************************
 
-def makeFeatureVec(words, model, num_features):
+def makeFeatureVec(words, model, num_features, feature_dict):
     # Utility function to create an average word vector for a given review
-    featureVec = np.zeros((num_features,),dtype="float32")
+    reviewFeatureVec = np.zeros((num_features,),dtype="float32")
     nwords = 0.
     # Convert index2word to a set, for speed
     index2word_set = set(model.index2word)    
+    dict_key_set = set(feature_dict.keys())
     for word in words:
         if word in index2word_set:  # index2word returns the vocabulary list for the model
-            nwords = nwords + 1.
-            featureVec = np.add(featureVec,model[word])
-    featureVec = np.divide(featureVec,nwords)
+            if word in dict_key_set: 
+                nwords = nwords + 1.
+                weightedWordVec = np.multiply(model[word],feature_dict[word])
+                reviewFeatureVec = np.add(reviewFeatureVec,weightedWordVec)
+    featureVec = np.divide(reviewFeatureVec,nwords)
     return featureVec
 
-def getAvgFeatureVecs(reviews, model, num_features):
+
+def getWeightedFeatureVecs(reviews, model, num_features, feature_dict):
     # Given a set of reviews (each one a list of words), calculate the average feature vector
     # and return a 2D numpy array
     counter = 0.
@@ -100,9 +83,10 @@ def getAvgFeatureVecs(reviews, model, num_features):
     for review in reviews:
         if counter%1000. == 0.:
             print "Review %d of %d" % (counter, len(reviews))
-        reviewFeatureVecs[counter] = makeFeatureVec(review, model, num_features)
+        reviewFeatureVecs[counter] = makeFeatureVec(review, model, num_features, feature_dict)
         counter = counter + 1.
     return reviewFeatureVecs
+
 
 # NOTE: The vector averaging is a bit slow (despite some minor optimizations such as matrix preallocation)
 #
@@ -110,14 +94,17 @@ def getAvgFeatureVecs(reviews, model, num_features):
 # if the tutorial wants to go into that; could use the python package pp 
 # http://www.parallelpython.com/content/view/15/30/#QUICKSMP
 
+# the function 'getWeightedFeatureVecs' requires individual words, not a whole review (input
+# should be a list of lists)
+#
 print "Creating average feature vectors for labeled reviews..."
 
-# Unlike the first step, we now need to parse the reviews as a whole, not as individual sentences
 clean_train_reviews = []
 for review in train["review"]:
-    clean_train_reviews.append(review_to_words(review,remove_stopwords=True))
+    clean_train_reviews.append(clean_review(review))
 
-trainDataVecs = getAvgFeatureVecs( clean_train_reviews, model, num_features)
+trainDataVecs = getWeightedFeatureVecs( clean_train_reviews, model, num_features, feature_dict )
+
 
 # Fit a simple classifier such as logreg or RF 
 from sklearn.ensemble import RandomForestClassifier
@@ -129,10 +116,15 @@ forest = forest.fit(trainDataVecs,train["sentiment"])
 print "Creating average feature vecs for test reviews"
 clean_test_reviews = []
 for review in test["review"]:
-    clean_test_reviews.append(review_to_words(review,remove_stopwords=True))
+    clean_test_reviews.append(review_to_words(review))
+
 
 # Slowish; see comments above - good candidate for parallelizing if we want to go that route
-testDataVecs = getAvgFeatureVecs( clean_test_reviews, model, num_features )
+clean_test_reviews = []
+for review in test["review"]:
+    clean_test_reviews.append(clean_review(review))
+
+testDataVecs = getWeightedFeatureVecs( clean_test_reviews, model, num_features, feature_dict )
 
 # Test & extract results
 result = forest.predict(testDataVecs)
@@ -153,7 +145,7 @@ print "Fraction correct = %f" % percent_correct
 
 # ***********************
 #
-# With 4096 features and stopword removal (supervised portion only): 82.4% correct
+# With 4096 features and stopword removal (supervised portion only): 81.2% correct
 
 
 

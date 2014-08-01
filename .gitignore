@@ -1,5 +1,7 @@
-Word2Vec.csv
-Bag_of_Words.csv
-*TRUTH*
-*.pyc
-.DS_Store
+Word2Vec.csv 
+Bag_of_Words.csv 
+*TRUTH*  
+*.pyc 
+.DS_Store 
+*~ 
+*# 
