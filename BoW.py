@@ -11,18 +11,17 @@ test = pd.read_csv("testData.tsv",header=0,delimiter="\t",quoting=3)
 # In general, not a good idea to use regex to strip HTML
 # Might be ok in this case though
 
-print train["review"][1]
+print train["review"][0]
 from bs4 import BeautifulSoup
-example1 = BeautifulSoup(train["review"][1])
+example1 = BeautifulSoup(train["review"][0])
 print example1.get_text()
 
-# This has the tag \x85 - python decode method w/ UTF-8 doesn't get rid of it
-# Using 'print' makes us not see it on screen though - good enough for me!
 
 # Remove numbers & punctuation; tokenize
 import re
 example1_alpha = re.sub("[^a-zA-Z]"," ", example1.get_text())
 words = example1_alpha.lower().split()
+
 
 # Tokenize
 #from nltk.tokenize import RegexpTokenizer
@@ -46,15 +45,28 @@ words = [w for w in words if not w in stopwords.words('english')]
 # filtered_words = [stemmer.stem(w) for w in words if not w in stopwords.words('english')]
 # Also note that we could "lemmatize" (but aren't going to)
 
-# Put it together into a function
-def review_to_words(review):
-    review_text = BeautifulSoup(review).get_text()     # Remove any HTML 
-    review_text = re.sub("[^a-zA-Z]"," ", review_text) # Remove any numbers & punctuation
-    review_text = re.sub(r'(.)\1+', r'\1\1',review_text) # replace doubled up letters
-    words = review_text.lower().split()                # Convert to lower case, split into words
-    stops = set(stopwords.words("english")) # Sets faster than lists!
-    meaningful_words = [w for w in words if not w in stops]  # Remove stopwords
-    return(" ".join(meaningful_words))  # Pass the words back to the caller as a single "document"   
+def review_to_words( raw_review ):
+    # Function to convert a raw review to a string of words
+    #
+    # 1. Remove HTML
+    review_text = BeautifulSoup(raw_review).get_text() 
+    #
+    # 2. Remove non-letters        
+    letters_only = re.sub("[^a-zA-Z]", " ", review_text) 
+    #
+    # 3. Convert to lower case, split into individual words
+    words = letters_only.lower().split()                             
+    #
+    # 4. In Python, searching a set is much, much faster than searching
+    #   a list, so convert the stop words to a set
+    stops = set(stopwords.words("english"))                  
+    # 
+    # 5. Remove stop words
+    meaningful_words = [w for w in words if not w in stops]   
+    #
+    # 6. Join the words back into a paragraph and return.
+    return( " ".join( meaningful_words ))   
+
 
 num_reviews = train["review"].size
 clean_train_reviews = []
