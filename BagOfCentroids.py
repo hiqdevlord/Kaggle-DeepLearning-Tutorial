@@ -1,16 +1,22 @@
 # Import a pre-trained model
 from gensim.models import Word2Vec
-model = Word2Vec.load("model_500features_50minwords_window10") # ChangeMe
+model = Word2Vec.load("300features_40min_word_count_10context") # ChangeMe
 word_vectors = model.syn0 # float32 array of vocab_size rows x num_features columns
 
-#Word2Vec output is already normalized; shouldn't need to whiten the vectors
 from sklearn.cluster import KMeans
 import time
 
 start = time.time() # Start timer
 
-# 500 clusters, 500 features, ~15k vocab took ~11 minutes => 81% correct
-num_clusters = 1500
+# 250 clusters, 500 features, ~15k vocab -> 81.7% correct 
+# 500 clusters, 500 features, ~15k vocab took ~11 minutes  -> 82.81% correct
+# 1000 clusters, 500 features, ~15k vocab took 22 minutes -> 82.9% normalized, 82.8% not normalized
+# 1500 clusters, 500 features, ~15k vocab => 33 minutes -> 83.6% correct
+# about 5000 clusters -> 3729 seconds -> 84.5% correct
+
+# Basic conclusion: this is time consuming and doesn't work better than bag of words!
+
+num_clusters = word_vectors.shape[0] / 5
 kmeans_clustering = KMeans( n_clusters = num_clusters )
 idx = kmeans_clustering.fit_predict( word_vectors )
 
@@ -23,7 +29,7 @@ word_centroid_map = dict(zip( model.index2word, idx ))
 
 # Now need some code to convert paragraphs into bags of centroids
 import pandas as pd
-train = pd.read_csv("trainData.tsv", header=0,delimiter="\t",quoting=3)
+train = pd.read_csv("labeledtrainData.tsv", header=0,delimiter="\t",quoting=3)
 test = pd.read_csv("testData.tsv",header=0,delimiter="\t",quoting=3)
 
 from bs4 import BeautifulSoup
@@ -56,36 +62,40 @@ def create_bag_of_centroids( wordlist, word_centroid_map ):
             bag_of_centroids[index] += 1
     return bag_of_centroids
 
+
 # Output of this should be a n_reviews x n_centroids array
 train_centroids = np.zeros((train["review"].size, num_clusters),dtype="float32")
 counter = 0.
 for review in clean_train_reviews:
+    if (counter % 5000) == 0:
+        print "review %d of %d" % (counter, len(clean_train_reviews))
     train_centroids[counter] = create_bag_of_centroids( review, word_centroid_map )
     counter = counter+1
-    print counter
 
 
 # Fit a simple classifier such as logreg or RF 
 from sklearn.ensemble import RandomForestClassifier
 forest = RandomForestClassifier(n_estimators = 100)
 print "Fitting a random forest to labeled training data..."
-forest = forest.fit(trainDataVecs,train["sentiment"])
+forest = forest.fit(train_centroids,train["sentiment"])
 
 
 # Convert test reviews to bags of centroids
 test_centroids = np.zeros((test["review"].size, num_clusters), dtype="float32")
 counter = 0.
 for review in clean_test_reviews:
+    if (counter % 5000) == 0:
+        print "review %d of %d" % (counter, len(clean_test_reviews))
     test_centroids[counter] = create_bag_of_centroids( review, word_centroid_map )
     counter = counter + 1
-    print counter
 
 # Test & extract results
-result = forest.predict(testDataVecs)
+result = forest.predict(test_centroids)
 
 # Write the test results
 output = pd.DataFrame(data={"id":test["id"], "sentiment":result})
-output.to_csv("Word2Vec.csv")
+output.to_csv("BagOfCentroids.csv")
+
 
 # **********************
 

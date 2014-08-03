@@ -38,7 +38,6 @@ def review_to_sentences( review, tokenizer, remove_stopwords=False ):
             sentences.append(review_to_wordlist(raw_sentence,remove_stopwords))
     return sentences
 
-
 import nltk.data
 tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
 
@@ -59,11 +58,11 @@ print "Parsing sentences from unlabeled set"
 for review in unlabeled_train["review"]:
     sentences += review_to_sentences(review, tokenizer)
 
-num_features = 500 # should be a multiple of 4 for optimal speed but can be anything. Lower -> faster
-min_word_count = 50 # Set to at least some reasonable value like 10. Higher -> faster
+num_features = 300 # should be a multiple of 4 for optimal speed but can be anything. Lower -> faster
+min_word_count = 40 # Set to at least some reasonable value like 10. Higher -> faster. 
 num_workers = 4 # Number of threads to run in parallel. Varies by machine but at least 4 is a safe bet
 context = 10 # for hierarchical softmax
-downsampling = 1e-3 # for frequent words
+downsampling = 1e-3
 
 # Can verify that the parallization is working by using >top -o cpu. The Python process should spin up to usage
 # of around num_workers * 100%
@@ -78,10 +77,21 @@ downsampling = 1e-3 # for frequent words
 print "Training model..."
 model = word2vec.Word2Vec(sentences, workers=num_workers, size=num_features,  min_count = min_word_count, \
                               window = context, sample = downsampling)
-model.save("model_500features_50minwords_window10")
+
+model.init_sims(replace=True)
+
+model_name = "%dfeatures_%dmin_word_count_%dcontext" % (num_features, min_word_count, 
+                                                        context)
+model.save(model_name)
+
+# Some examples
+model.doesnt_match("man woman child kitchen".split())
+model.most_similar("france")
+model.most_similar("awful")
+
 
 # The below makes the model more memory efficient but seals it off from further training
-model.init_sims(replace=True)
+# model.init_sims(replace=True)
 
 # In the tutorial, also make a note that they can save / load this model - train it more later
 
