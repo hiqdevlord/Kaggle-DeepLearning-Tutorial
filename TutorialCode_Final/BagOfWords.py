@@ -1,3 +1,12 @@
+#  Author: Angela Chapman
+#  Date: 8/6/2014
+#
+#  This file contains code to accompany the Kaggle tutorial
+#  "Deep learning goes to the movies".  The code in this file
+#  is for Part 1 of the tutorial on Natural Language Processing.
+#
+# *************************************** #
+
 # ****** Read the train data, and explore how to clean a single review
 #
 
