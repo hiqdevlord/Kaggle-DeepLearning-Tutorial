@@ -165,5 +165,5 @@ result = forest.predict(test_centroids)
 
 # Write the test results 
 output = pd.DataFrame(data={"id":test["id"], "sentiment":result})
-output.to_csv("BagOfCentroids.csv")
+output.to_csv("BagOfCentroids.csv", index=False, quoting=3)
 print "Wrote BagOfCentroids.csv"

@@ -189,5 +189,5 @@ result = forest.predict(test_data_features)
 output = pd.DataFrame( data={"id":test["id"], "sentiment":result} )
 
 # Use pandas to write the comma-separated output file
-output.to_csv( "Bag_of_Words_model.csv" )
+output.to_csv( "Bag_of_Words_model.csv", index=False, quoting=3 )
 print "Wrote results to Bag_of_Words_model.csv"

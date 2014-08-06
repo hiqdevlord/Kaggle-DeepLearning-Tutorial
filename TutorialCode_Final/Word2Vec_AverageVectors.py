@@ -230,5 +230,5 @@ result = forest.predict( testDataVecs )
 
 # Write the test results 
 output = pd.DataFrame( data={"id":test["id"], "sentiment":result} )
-output.to_csv( "Word2Vec_AverageVectors.csv" )
+output.to_csv( "Word2Vec_AverageVectors.csv", index=False, quoting=3 )
 print "Wrote Word2Vec_AverageVectors.csv"
