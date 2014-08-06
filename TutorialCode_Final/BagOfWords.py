@@ -128,11 +128,8 @@ print train_data_features.shape
 vocab = vectorizer.get_feature_names()
 print vocab
 
-# If you're interested, you can also print the counts of each word in 
-# the vocabulary
-import numpy as np
-
 # Sum up the counts of each vocabulary word
+import numpy as np
 dist = np.sum(train_data_features, axis=0)
 
 # For each, print the vocabulary word and the number of times it appears in 
@@ -143,7 +140,7 @@ for tag, count in zip(vocab, dist):
 
 # ******* Train a random forest using the bag of words
 #
-print "Training the random forest..."
+print "Training the random forest (this may take a while)..."
 from sklearn.ensemble import RandomForestClassifier
 
 # Initialize a Random Forest classifier with 100 trees
@@ -173,7 +170,7 @@ print "Cleaning and parsing the test set movie reviews...\n"
 for i in xrange(0,num_reviews):
     if( (i+1) % 1000 == 0 ):
         print "Review %d of %d\n" % (i+1, num_reviews)
-    clean_review = review_to_words( train["review"][i] )
+    clean_review = review_to_words( test["review"][i] )
     clean_test_reviews.append( clean_review )
 
 # Get a bag of words for the test set, and convert to a numpy array
